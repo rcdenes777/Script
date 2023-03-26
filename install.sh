@@ -148,7 +148,7 @@ chmod 600 /mnt/@/.snapshots/1/info.xml
 umount /mnt
 echo "Mounting the newly created subvolumes."
 mount -o ssd,noatime,space_cache,compress=zstd:15 $BTRFS /mnt
-mkdir -p /mnt/{boot,root,home,.snapshots,srv,tmp,/var/log,/var/crash,/var/cache,/var/tmp,/var/spool,/var/lib/libvirt/images,/var/lib/machines,/var/lib/gdm,/var/lib/AccountsService}
+mkdir -p /mnt/{boot,root,home,.snapshots,srv,tmp,/var/log,/var/crash,/var/cache,/var/tmp,/var/spool,/var/lib/libvirt/images,/var/lib/machines,/var/lib/sddm,/var/lib/AccountsService}
 mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,nodev,nosuid,noexec,subvol=@/boot $BTRFS /mnt/boot
 mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,nodev,nosuid,subvol=@/root $BTRFS /mnt/root
 mount -o ssd,noatime,space_cache=v2.autodefrag,compress=zstd:15,discard=async,nodev,nosuid,subvol=@/home $BTRFS /mnt/home
@@ -171,8 +171,8 @@ mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,no
 mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var_lib_libvirt_images $BTRFS /mnt/var/lib/libvirt/images
 mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var_lib_machines $BTRFS /mnt/var/lib/machines
 
-# GNOME requires /var/lib/gdm and /var/lib/AccountsService to be writeable when booting into a readonly snapshot. Thus we sadly have to split them.
-mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var_lib_gdm $BTRFS /mnt/var/lib/gdm
+# GNOME requires /var/lib/sddm and /var/lib/AccountsService to be writeable when booting into a readonly snapshot. Thus we sadly have to split them.
+mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var_lib_sddm $BTRFS /mnt/var/lib/sddm
 mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var_lib_AccountsService $BTRFS /mnt/var/lib/AccountsService
 
 # The encryption is splitted as we do not want to include it in the backup with snap-pac.
@@ -186,8 +186,68 @@ kernel_selector
 # Pacstrap (setting up a base sytem onto the new root).
 # As I said above, I am considering replacing gnome-software with pamac-flatpak-gnome as PackageKit seems very buggy on Arch Linux right now.
 echo "Installing the base system (it may take a while)."
-pacstrap /mnt base ${kernel} ${microcode} linux-firmware grub grub-btrfs snapper snap-pac efibootmgr sudo networkmanager apparmor
-python-psutil python-notify2 nano sddm  pipewire-pulse pipewire-alsa pipewire-jack flatpak firewalld zram-generator adobe-source-han-sans-otc-fonts adobe-source-han-serif-otc-fonts gnu-free-fonts reflector mlocate man-db chrony
+pacstrap /mnt base base-devel ${kernel} ${microcode} linux-firmware linux-headers dkms
+grub grub-btrfs grub-theme-vimix os-prober snapper snap-pac efibootmgr
+bash-completion sudo nano
+dosfstools exfat-utils f2fs-tools fuse fuse-exfat mtpfs
+plasma-desktop konsole ark dolphin dolphin-plugins kate partitionmanager okular plasma-nm kdeplasma-addons kcalc plasma-browser-integration
+sddm sddm-kcm
+mtoolsnetworkmanager apparmor
+python-psutil python-notify2
+sddm 
+pipewire-pulse pipewire-alsa pipewire-jack kpipewire
+flatpak firewalld zram-generator 
+adobe-source-han-sans-otc-fonts adobe-source-han-serif-otc-fonts gnu-free-fonts reflector mlocate man-db chrony
+# Instalação do sistema base
+echo "Installing the base system (it may take a while)."
+pacstrap /mnt base base-devel ${kernel} ${microcode} linux-firmware linux-headers dkms
+
+# Configuração do bootloader e ferramentas relacionadas
+pacstrap /mnt grub grub-btrfs grub-theme-vimix os-prober efibootmgr
+
+# Ferramentas de linha de comando
+pacstrap /mnt bash-completion sudo nano dosfstools exfat-utils f2fs-tools fuse fuse-exfat mtpfs
+
+# Pacotes do KDE Plasma
+pacstrap /mnt plasma-desktop konsole ark dolphin dolphin-plugins kate partitionmanager okular plasma-nm kdeplasma-addons kcalc plasma-browser-integration sddm sddm-kcm
+
+# Outras ferramentas e pacotes
+pacstrap /mnt snapper snap-pac mtools networkmanager apparmor python-psutil python-notify2 pipewire-pulse pipewire-alsa pipewire-jack kpipewire flatpak firewalld zram-generator adobe-source-han-sans-otc-fonts adobe-source-han-serif-otc-fonts gnu-free-fonts reflector mlocate man-db chrony
+
+
+
+#!/bin/bash
+
+# Define as cores
+RED=$(tput setaf 1)
+GREEN=$(tput setaf 2)
+YELLOW=$(tput setaf 3)
+RESET=$(tput sgr0)
+
+# Função para exibir mensagens de erro
+error() {
+    echo "${RED}[ERRO] $*${RESET}" >&2
+    exit 1
+}
+
+# Exibe mensagem de boas vindas
+echo "${YELLOW}######################################################"
+echo "  Instalador do Tema do GRUB "
+echo "######################################################${RESET}"
+sleep 2s
+
+
+# Configura o GRUB
+echo "${YELLOW}Configurando o GRUB...${RESET}"
+GRUB_THEME="/usr/share/grub/themes/Vimix/theme.txt"
+if ! grep -q "^GRUB_THEME=" /mnt/etc/default/grub; then
+    echo "GRUB_THEME=\"$GRUB_THEME\"" >> /mnt/etc/default/grub || error "Não foi possível configurar o GRUB"
+else
+    sed -r -i "s|^GRUB_THEME=\"[^\"]+\"|GRUB_THEME=\"$GRUB_THEME\"|" /mnt/etc/default/grub || error "Não foi possível configurar o GRUB"
+fi
+
+echo "${GREEN}Concluído!${RESET}"
+
 
 # Routing jack2 through PipeWire.
 echo "/usr/lib/pipewire-0.3/jack" > /mnt/etc/ld.so.conf.d/pipewire-jack.conf
