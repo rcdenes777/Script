@@ -81,10 +81,10 @@ echo "Formatting the EFI Partition as FAT32."
 mkfs.fat -F 32 -s 2 $ESP &>/dev/null
 
 # Creating a LUKS Container for the root partition.
-echo "Creating LUKS Container for the root partition."
-cryptsetup luksFormat --type luks1 $cryptroot
-echo "Opening the newly created LUKS Container."
-cryptsetup open $cryptroot cryptroot
+#echo "Creating LUKS Container for the root partition."
+#cryptsetup luksFormat --type luks1 $cryptroot
+#echo "Opening the newly created LUKS Container."
+#cryptsetup open $cryptroot cryptroot
 BTRFS="/dev/mapper/cryptroot"
 
 # Formatting the LUKS Container as BTRFS.
@@ -112,7 +112,7 @@ btrfs su cr /mnt/@/var_lib_libvirt_images &>/dev/null
 btrfs su cr /mnt/@/var_lib_machines &>/dev/null
 btrfs su cr /mnt/@/var_lib_gdm &>/dev/null
 btrfs su cr /mnt/@/var_lib_AccountsService &>/dev/null
-btrfs su cr /mnt/@/cryptkey &>/dev/null
+#btrfs su cr /mnt/@/cryptkey &>/dev/null
 
 chattr +C /mnt/@/boot
 chattr +C /mnt/@/srv
@@ -126,7 +126,7 @@ chattr +C /mnt/@/var_lib_libvirt_images
 chattr +C /mnt/@/var_lib_machines
 chattr +C /mnt/@/var_lib_gdm
 chattr +C /mnt/@/var_lib_AccountsService
-chattr +C /mnt/@/cryptkey
+#chattr +C /mnt/@/cryptkey
 
 #Set the default BTRFS Subvol to Snapshot 1 before pacstrapping
 btrfs subvolume set-default "$(btrfs subvolume list /mnt | grep "@/.snapshots/1/snapshot" | grep -oP '(?<=ID )[0-9]+')" /mnt
@@ -148,7 +148,7 @@ chmod 600 /mnt/@/.snapshots/1/info.xml
 umount /mnt
 echo "Mounting the newly created subvolumes."
 mount -o ssd,noatime,space_cache,compress=zstd:15 $BTRFS /mnt
-mkdir -p /mnt/{boot,root,home,.snapshots,srv,tmp,/var/log,/var/crash,/var/cache,/var/tmp,/var/spool,/var/lib/libvirt/images,/var/lib/machines,/var/lib/gdm,/var/lib/AccountsService,/cryptkey}
+mkdir -p /mnt/{boot,root,home,.snapshots,srv,tmp,/var/log,/var/crash,/var/cache,/var/tmp,/var/spool,/var/lib/libvirt/images,/var/lib/machines,/var/lib/gdm,/var/lib/AccountsService}
 mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,nodev,nosuid,noexec,subvol=@/boot $BTRFS /mnt/boot
 mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,nodev,nosuid,subvol=@/root $BTRFS /mnt/root
 mount -o ssd,noatime,space_cache=v2.autodefrag,compress=zstd:15,discard=async,nodev,nosuid,subvol=@/home $BTRFS /mnt/home
@@ -176,7 +176,7 @@ mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,no
 mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/var_lib_AccountsService $BTRFS /mnt/var/lib/AccountsService
 
 # The encryption is splitted as we do not want to include it in the backup with snap-pac.
-mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/cryptkey $BTRFS /mnt/cryptkey
+#mount -o ssd,noatime,space_cache=v2,autodefrag,compress=zstd:15,discard=async,nodatacow,nodev,nosuid,noexec,subvol=@/cryptkey $BTRFS /mnt/cryptkey
 
 mkdir -p /mnt/boot/efi
 mount -o nodev,nosuid,noexec $ESP /mnt/boot/efi
@@ -186,7 +186,8 @@ kernel_selector
 # Pacstrap (setting up a base sytem onto the new root).
 # As I said above, I am considering replacing gnome-software with pamac-flatpak-gnome as PackageKit seems very buggy on Arch Linux right now.
 echo "Installing the base system (it may take a while)."
-pacstrap /mnt base ${kernel} ${microcode} linux-firmware grub grub-btrfs snapper snap-pac efibootmgr sudo networkmanager apparmor python-psutil python-notify2 nano gdm gnome-control-center gnome-terminal gnome-software gnome-software-packagekit-plugin gnome-tweaks nautilus pipewire-pulse pipewire-alsa pipewire-jack flatpak firewalld zram-generator adobe-source-han-sans-otc-fonts adobe-source-han-serif-otc-fonts gnu-free-fonts reflector mlocate man-db chrony
+pacstrap /mnt base ${kernel} ${microcode} linux-firmware grub grub-btrfs snapper snap-pac efibootmgr sudo networkmanager apparmor
+python-psutil python-notify2 nano sddm  pipewire-pulse pipewire-alsa pipewire-jack flatpak firewalld zram-generator adobe-source-han-sans-otc-fonts adobe-source-han-serif-otc-fonts gnu-free-fonts reflector mlocate man-db chrony
 
 # Routing jack2 through PipeWire.
 echo "/usr/lib/pipewire-0.3/jack" > /mnt/etc/ld.so.conf.d/pipewire-jack.conf
