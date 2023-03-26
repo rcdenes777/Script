@@ -1,33 +1,14 @@
 #!/usr/bin/env bash
-
 set -e
 
 # Cleaning the TTY.
 clear
 
-# Initialize and populate the pacman keyring.
-pacman-key --init
-pacman-key --populate
-
-# Updating the live environment usually causes more problems than its worth,
-# and quite often can't be done without remounting cowspace with more capacity,
-# especially at the end of any given month.
+# Updating the live environment usually causes more problems than its worth, and quite often can't be done without remounting cowspace with more capacity, especially at the end of any given month.
 pacman -Sy
 
-# Installing curl and git.
-pacman -S --noconfirm curl 
-
-# Updating package list and refreshing mirror list.
-tput setaf 11;echo "################################################################"
-echo "Updating package list."
-echo "################################################################"
-echo; tput sgr0
-sleep 2s
-
-pacman -S --noconfirm reflector
-reflector --country Brazil --protocol http --protocol https --sort rate --save /etc/pacman.d/mirrorlist
-pacman -Syyy --noconfirm
-
+# Installing curl
+pacman -S --noconfirm curl
 
 # Selecting the kernel flavor to install.
 kernel_selector () {
@@ -86,11 +67,11 @@ parted -s "$DISK" \
     mklabel gpt \
     mkpart ESP fat32 1MiB 128MiB \
     set 1 esp on \
-    mkpart cryptroot 128MiB 100% \
+    mkpart archlinux 128MiB 100% \
 
 sleep 0.1
 ESP="/dev/$(lsblk $DISK -o NAME,PARTLABEL | grep ESP| cut -d " " -f1 | cut -c7-)"
-cryptroot="/dev/$(lsblk $DISK -o NAME,PARTLABEL | grep cryptroot | cut -d " " -f1 | cut -c7-)"
+archlinux="/dev/$(lsblk $DISK -o NAME,PARTLABEL | grep archlinux | cut -d " " -f1 | cut -c7-)"
 
 # Informing the Kernel of the changes.
 echo "Informing the Kernel about the disk changes."
@@ -100,17 +81,11 @@ partprobe "$DISK"
 echo "Formatting the EFI Partition as FAT32."
 mkfs.fat -F 32 -s 2 $ESP &>/dev/null
 
-# Creating a LUKS Container for the root partition.
-#echo "Creating LUKS Container for the root partition."
-#cryptsetup luksFormat --type luks1 $cryptroot
-#echo "Opening the newly created LUKS Container."
-#cryptsetup open $cryptroot cryptroot
-BTRFS="/dev/mapper/cryptroot"
+# Formatting the root partition as btrfs.
+echo "Formatting the root partition as btrfs."
+mkfs.btrfs $archlinux &>/dev/null
+mount -o clear_cache,nospace_cache $archlinux /mnt
 
-# Formatting the LUKS Container as BTRFS.
-echo "Formatting the partiçao root as BTRFS."
-mkfs.btrfs $BTRFS &>/dev/null
-mount -o clear_cache,nospace_cache $BTRFS /mnt
 
 # Creating BTRFS subvolumes.
 echo "Creating BTRFS subvolumes."
