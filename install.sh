@@ -1,13 +1,33 @@
-#!/usr/bin/env -S bash -e
+#!/usr/bin/env bash
+
+set -e
 
 # Cleaning the TTY.
 clear
 
-# Updating the live environment usually causes more problems than its worth, and quite often can't be done without remounting cowspace with more capacity, especially at the end of any given month.
+# Initialize and populate the pacman keyring.
+pacman-key --init
+pacman-key --populate
+
+# Updating the live environment usually causes more problems than its worth,
+# and quite often can't be done without remounting cowspace with more capacity,
+# especially at the end of any given month.
 pacman -Sy
 
-# Installing curl
-pacman -S --noconfirm curl
+# Installing curl and git.
+pacman -S --noconfirm curl 
+
+# Updating package list and refreshing mirror list.
+tput setaf 11;echo "################################################################"
+echo "Updating package list."
+echo "################################################################"
+echo; tput sgr0
+sleep 2s
+
+pacman -S --noconfirm reflector
+reflector --country Brazil --protocol http --protocol https --sort rate --save /etc/pacman.d/mirrorlist
+pacman -Syyy --noconfirm
+
 
 # Selecting the kernel flavor to install.
 kernel_selector () {
@@ -88,7 +108,7 @@ mkfs.fat -F 32 -s 2 $ESP &>/dev/null
 BTRFS="/dev/mapper/cryptroot"
 
 # Formatting the LUKS Container as BTRFS.
-echo "Formatting the LUKS container as BTRFS."
+echo "Formatting the partiçao root as BTRFS."
 mkfs.btrfs $BTRFS &>/dev/null
 mount -o clear_cache,nospace_cache $BTRFS /mnt
 
@@ -198,6 +218,7 @@ sddm
 pipewire-pulse pipewire-alsa pipewire-jack kpipewire
 flatpak firewalld zram-generator 
 adobe-source-han-sans-otc-fonts adobe-source-han-serif-otc-fonts gnu-free-fonts reflector mlocate man-db chrony
+
 # Instalação do sistema base
 echo "Installing the base system (it may take a while)."
 pacstrap /mnt base base-devel ${kernel} ${microcode} linux-firmware linux-headers dkms
@@ -209,14 +230,20 @@ pacstrap /mnt grub grub-btrfs grub-theme-vimix os-prober efibootmgr
 pacstrap /mnt bash-completion sudo nano dosfstools exfat-utils f2fs-tools fuse fuse-exfat mtpfs
 
 # Pacotes do KDE Plasma
-pacstrap /mnt plasma-desktop konsole ark dolphin dolphin-plugins kate partitionmanager okular plasma-nm kdeplasma-addons kcalc plasma-browser-integration sddm sddm-kcm
+pacstrap /mnt plasma-desktop konsole ark dolphin dolphin-plugins kate partitionmanager okular plasma-nm kdeplasma-addons kcalc plasma-browser-integration 
+
+# Pacotes de loguin KDE Plasma
+pacstrap /mnt sddm sddm-kcm
 
 # Outras ferramentas e pacotes
-pacstrap /mnt snapper snap-pac mtools networkmanager apparmor python-psutil python-notify2 pipewire-pulse pipewire-alsa pipewire-jack kpipewire flatpak firewalld zram-generator adobe-source-han-sans-otc-fonts adobe-source-han-serif-otc-fonts gnu-free-fonts reflector mlocate man-db chrony
+pacstrap /mnt snapper snap-pac mtools networkmanager apparmor python-psutil python-notify2
+
+# pacotes de audio mais Gernciador de audio do kde
+pacstrap /mnt pipewire-pulse pipewire-alsa pipewire-jack kpipewire
+
+flatpak firewalld zram-generator adobe-source-han-sans-otc-fonts adobe-source-han-serif-otc-fonts gnu-free-fonts reflector mlocate man-db chrony
 
 
-
-#!/bin/bash
 
 # Define as cores
 RED=$(tput setaf 1)
@@ -284,11 +311,11 @@ echo "KEYMAP=$kblayout" > /mnt/etc/vconsole.conf
 # Configuring /etc/mkinitcpio.conf
 echo "Configuring /etc/mkinitcpio for ZSTD compression and LUKS hook."
 sed -i 's,#COMPRESSION="zstd",COMPRESSION="zstd",g' /mnt/etc/mkinitcpio.conf
-sed -i 's,modconf block filesystems keyboard,keyboard modconf block encrypt filesystems,g' /mnt/etc/mkinitcpio.conf
+sed -i 's,modconf block filesystems keyboard,keyboard modconf block filesystems,g' /mnt/etc/mkinitcpio.conf
 
 # Enabling LUKS in GRUB and setting the UUID of the LUKS container.
 UUID=$(blkid $cryptroot | cut -f2 -d'"')
-sed -i 's/#\(GRUB_ENABLE_CRYPTODISK=y\)/\1/' /mnt/etc/default/grub
+#sed -i 's/#\(GRUB_ENABLE_CRYPTODISK=y\)/\1/' /mnt/etc/default/grub
 echo "" >> /mnt/etc/default/grub
 echo -e "# Booting with BTRFS subvolume\nGRUB_BTRFS_OVERRIDE_BOOT_PARTITION_DETECTION=true" >> /mnt/etc/default/grub
 sed -i 's#rootflags=subvol=${rootsubvol}##g' /mnt/etc/grub.d/10_linux
@@ -310,11 +337,11 @@ curl https://raw.githubusercontent.com/GrapheneOS/infrastructure/main/chrony.con
 chmod 755 /mnt/etc/grub.d/*
 
 # Adding keyfile to the initramfs to avoid double password.
-dd bs=512 count=4 if=/dev/random of=/mnt/cryptkey/.root.key iflag=fullblock &>/dev/null
-chmod 000 /mnt/cryptkey/.root.key &>/dev/null
-cryptsetup -v luksAddKey /dev/disk/by-partlabel/cryptroot /mnt/cryptkey/.root.key
-sed -i "s#quiet#cryptdevice=UUID=$UUID:cryptroot root=$BTRFS lsm=landlock,lockdown,yama,apparmor,bpf cryptkey=rootfs:/cryptkey/.root.key#g" /mnt/etc/default/grub
-sed -i 's#FILES=()#FILES=(/cryptkey/.root.key)#g' /mnt/etc/mkinitcpio.conf
+#dd bs=512 count=4 if=/dev/random of=/mnt/cryptkey/.root.key iflag=fullblock &>/dev/null
+#chmod 000 /mnt/cryptkey/.root.key &>/dev/null
+#cryptsetup -v luksAddKey /dev/disk/by-partlabel/cryptroot /mnt/cryptkey/.root.key
+
+#sed -i "s#quiet# acpi=noirq root=$BTRFS lsm=landlock,lockdown,yama,apparmor,bpf#g" /mnt/etc/default/grub
 
 # Configure AppArmor Parser caching
 sed -i 's/#write-cache/write-cache/g' /mnt/etc/apparmor/parser.conf
@@ -469,7 +496,7 @@ systemctl enable fstrim.timer --root=/mnt &>/dev/null
 systemctl enable NetworkManager --root=/mnt &>/dev/null
 
 # Enabling GDM.
-systemctl enable gdm --root=/mnt &>/dev/null
+systemctl enable sddm --root=/mnt &>/dev/null
 
 # Enabling AppArmor.
 echo "Enabling AppArmor."
